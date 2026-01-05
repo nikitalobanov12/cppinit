@@ -1,6 +1,6 @@
 module github.com/nikitalobanov12/cppinit
 
-go 1.25.1
+go 1.23.0
 
 require (
 	github.com/charmbracelet/huh v0.8.0
