@@ -1,0 +1,112 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: cppinit
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: cppinit
+    main: ./cmd/cppinit
+    binary: cppinit
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+    mod_timestamp: '{{ .CommitTimestamp }}'
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - '^chore:'
+      - Merge pull request
+      - Merge branch
+
+brews:
+  - name: cppinit
+    repository:
+      owner: nikitalobanov12
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/nikitalobanov12/cppinit"
+    description: "Create modern C++ projects with CMake, testing, and best practices"
+    license: "MIT"
+    install: |
+      bin.install "cppinit"
+    test: |
+      system "#{bin}/cppinit", "-version"
+
+nfpms:
+  - id: packages
+    package_name: cppinit
+    vendor: Nikita Lobanov
+    homepage: https://github.com/nikitalobanov12/cppinit
+    maintainer: Nikita Lobanov
+    description: Create modern C++ projects with CMake, testing, and best practices
+    license: MIT
+    formats:
+      - deb
+      - rpm
+      - apk
+    bindir: /usr/bin
+
+aurs:
+  - name: cppinit-bin
+    homepage: https://github.com/nikitalobanov12/cppinit
+    description: Create modern C++ projects with CMake, testing, and best practices
+    maintainers:
+      - 'Nikita Lobanov'
+    license: MIT
+    private_key: '{{ .Env.AUR_KEY }}'
+    git_url: 'ssh://aur@aur.archlinux.org/cppinit-bin.git'
+    package: |-
+      install -Dm755 "./cppinit" "${pkgdir}/usr/bin/cppinit"
+      install -Dm644 "./LICENSE" "${pkgdir}/usr/share/licenses/cppinit/LICENSE"
+
+release:
+  github:
+    owner: nikitalobanov12
+    name: cppinit
+  draft: false
+  prerelease: auto
+  name_template: "v{{.Version}}"
