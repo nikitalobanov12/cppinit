@@ -25,7 +25,7 @@ endif()
 	var targetSection string
 	switch projectType {
 	case "executable":
-		targetSection = fmt.Sprintf(`
+		targetSection = `
 # Main executable
 add_executable(${PROJECT_NAME} src/main.cpp)
 
@@ -33,7 +33,7 @@ target_include_directories(${PROJECT_NAME}
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
-`)
+`
 	case "static":
 		targetSection = fmt.Sprintf(`
 # Library

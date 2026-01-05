@@ -134,26 +134,8 @@ func RunPrompts() (*Config, error) {
 	}
 
 	// Page 3: Tooling
-	toolingForm := huh.NewForm(
-		huh.NewGroup(
-			huh.NewMultiSelect[string]().
-				Title("Code quality tools").
-				Description("Select the tools you want to include").
-				Options(
-					huh.NewOption("clang-format (code formatting)", "clang-format").Selected(true),
-					huh.NewOption("clang-tidy (static analysis)", "clang-tidy").Selected(true),
-					huh.NewOption("Sanitizers (ASan, UBSan, TSan)", "sanitizers"),
-					huh.NewOption("Code coverage (gcov/lcov)", "coverage"),
-					huh.NewOption("Doxygen (documentation)", "doxygen"),
-					huh.NewOption("pre-commit hooks", "pre-commit"),
-				).
-				Value(&[]string{}).
-				Filterable(false),
-		).Title("Code Quality"),
-	)
-
 	var selectedTools []string
-	toolingForm = huh.NewForm(
+	toolingForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewMultiSelect[string]().
 				Title("Code quality tools").

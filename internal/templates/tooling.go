@@ -127,8 +127,8 @@ CompactNamespaces: false
 }
 
 // ClangTidy generates .clang-tidy configuration
-func ClangTidy(cppStandard string) string {
-	return fmt.Sprintf(`# SPDX-License-Identifier: MIT
+func ClangTidy(_ string) string {
+	return `# SPDX-License-Identifier: MIT
 # Clang-Tidy configuration
 
 Checks: >
@@ -193,7 +193,7 @@ CheckOptions:
     value: true
 
 FormatStyle: file
-`)
+`
 }
 
 // EditorConfig generates .editorconfig

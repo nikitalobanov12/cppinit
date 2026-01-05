@@ -244,7 +244,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 	// Add target based on project type
 	switch config.ProjectType {
 	case "executable":
-		sb.WriteString(fmt.Sprintf(`# Main executable
+		sb.WriteString(`# Main executable
 add_executable(${PROJECT_NAME}
     src/main.cpp
 )
@@ -254,7 +254,7 @@ target_include_directories(${PROJECT_NAME}
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
 
-`))
+`)
 	case "static":
 		sb.WriteString(fmt.Sprintf(`# Library target
 add_library(${PROJECT_NAME} STATIC
