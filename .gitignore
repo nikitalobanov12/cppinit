@@ -1,0 +1,15 @@
+# Binaries
+cppinit
+*.exe
+
+# Build directories
+dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test output
+coverage.out
