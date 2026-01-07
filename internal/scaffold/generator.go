@@ -83,20 +83,35 @@ func Generate(config *Config) error {
 		files["cmake/CPM.cmake"] = templates.CPMCMake()
 	}
 
-	// Source files
-	if config.ProjectType == "executable" {
-		files["src/main.cpp"] = templates.MainCpp(config.ProjectName)
-	} else if config.ProjectType == "static" {
-		files["src/"+config.ProjectName+".cpp"] = templates.LibraryCpp(config.ProjectName)
-		files["include/"+config.ProjectName+"/"+config.ProjectName+".hpp"] = templates.LibraryHpp(config.ProjectName)
-	} else if config.ProjectType == "header-only" {
-		files["include/"+config.ProjectName+"/"+config.ProjectName+".hpp"] = templates.HeaderOnlyHpp(config.ProjectName)
+	// Source files - use appropriate extensions for C or C++
+	if config.IsC() {
+		// C source files
+		if config.ProjectType == "executable" {
+			files["src/main.c"] = templates.MainC(config.ProjectName)
+		} else if config.ProjectType == "static" {
+			files["src/"+config.ProjectName+".c"] = templates.LibraryC(config.ProjectName)
+			files["include/"+config.ProjectName+"/"+config.ProjectName+".h"] = templates.LibraryH(config.ProjectName)
+		}
+	} else {
+		// C++ source files
+		if config.ProjectType == "executable" {
+			files["src/main.cpp"] = templates.MainCpp(config.ProjectName)
+		} else if config.ProjectType == "static" {
+			files["src/"+config.ProjectName+".cpp"] = templates.LibraryCpp(config.ProjectName)
+			files["include/"+config.ProjectName+"/"+config.ProjectName+".hpp"] = templates.LibraryHpp(config.ProjectName)
+		} else if config.ProjectType == "header-only" {
+			files["include/"+config.ProjectName+"/"+config.ProjectName+".hpp"] = templates.HeaderOnlyHpp(config.ProjectName)
+		}
 	}
 
 	// Test files
 	if config.TestFramework != "none" {
-		files["tests/CMakeLists.txt"] = templates.TestsCMakeLists(config.ProjectName, config.ProjectType, config.TestFramework)
-		files["tests/test_main.cpp"] = templates.TestMainCpp(config.ProjectName, config.ProjectType, config.TestFramework)
+		files["tests/CMakeLists.txt"] = templates.TestsCMakeLists(config.ProjectName, config.ProjectType, config.TestFramework, config.IsC())
+		if config.IsC() {
+			files["tests/test_main.c"] = templates.TestMainC(config.ProjectName, config.ProjectType, config.TestFramework)
+		} else {
+			files["tests/test_main.cpp"] = templates.TestMainCpp(config.ProjectName, config.ProjectType, config.TestFramework)
+		}
 	}
 
 	// Benchmark files
@@ -118,7 +133,7 @@ func Generate(config *Config) error {
 		files[".clang-format"] = templates.ClangFormat()
 	}
 	if config.UseClangTidy {
-		files[".clang-tidy"] = templates.ClangTidy(config.CppStandard)
+		files[".clang-tidy"] = templates.ClangTidy(config.Standard)
 	}
 	files[".editorconfig"] = templates.EditorConfig()
 
@@ -145,7 +160,7 @@ func Generate(config *Config) error {
 	// Docker
 	if config.UseDocker {
 		if config.ProjectType == "executable" {
-			files["Dockerfile"] = templates.Dockerfile(config.ProjectName, config.CppStandard)
+			files["Dockerfile"] = templates.Dockerfile(config.ProjectName, config.Standard)
 		}
 		files[".dockerignore"] = templates.DockerIgnore()
 		files[".devcontainer/devcontainer.json"] = templates.DevContainer(config.ProjectName)
@@ -193,12 +208,29 @@ func Generate(config *Config) error {
 func generateRootCMakeLists(config *Config) string {
 	var sb strings.Builder
 
+	// Determine language-specific settings
+	var langSetting string
+	var stdSetting string
+	if config.IsC() {
+		langSetting = "C"
+		stdSetting = fmt.Sprintf(`# Set C standard
+set(CMAKE_C_STANDARD %s)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS OFF)`, config.Standard)
+	} else {
+		langSetting = "CXX"
+		stdSetting = fmt.Sprintf(`# Set C++ standard
+set(CMAKE_CXX_STANDARD %s)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)`, config.Standard)
+	}
+
 	sb.WriteString(fmt.Sprintf(`cmake_minimum_required(VERSION 3.21)
 
 project(%s
     VERSION 0.1.0
     DESCRIPTION "%s"
-    LANGUAGES CXX
+    LANGUAGES %s
 )
 
 # Prevent in-source builds
@@ -206,10 +238,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
     message(FATAL_ERROR "In-source builds are not allowed. Please use a separate build directory.")
 endif()
 
-# Set C++ standard
-set(CMAKE_CXX_STANDARD %s)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+%s
 
 # Export compile commands for IDE/tooling support
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -217,7 +246,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Include custom CMake modules
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-`, config.ProjectName, config.Description, config.CppStandard))
+`, config.ProjectName, config.Description, langSetting, stdSetting))
 
 	// Include CMake modules
 	sb.WriteString("# Include CMake modules\n")
@@ -241,12 +270,18 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 	sb.WriteString("\n")
 
+	// Determine source file extension
+	srcExt := ".cpp"
+	if config.IsC() {
+		srcExt = ".c"
+	}
+
 	// Add target based on project type
 	switch config.ProjectType {
 	case "executable":
-		sb.WriteString(`# Main executable
+		sb.WriteString(fmt.Sprintf(`# Main executable
 add_executable(${PROJECT_NAME}
-    src/main.cpp
+    src/main%s
 )
 
 target_include_directories(${PROJECT_NAME}
@@ -254,11 +289,11 @@ target_include_directories(${PROJECT_NAME}
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
 
-`)
+`, srcExt))
 	case "static":
 		sb.WriteString(fmt.Sprintf(`# Library target
 add_library(${PROJECT_NAME} STATIC
-    src/%s.cpp
+    src/%s%s
 )
 
 # Create alias for use with FetchContent/subdirectory
@@ -270,7 +305,7 @@ target_include_directories(${PROJECT_NAME}
         $<INSTALL_INTERFACE:include>
 )
 
-`, config.ProjectName))
+`, config.ProjectName, srcExt))
 	case "header-only":
 		sb.WriteString(`# Header-only library
 add_library(${PROJECT_NAME} INTERFACE)
@@ -378,6 +413,14 @@ func generateReadme(config *Config) string {
 	sb.WriteString(fmt.Sprintf("# %s\n\n", config.ProjectName))
 	sb.WriteString(fmt.Sprintf("%s\n\n", config.Description))
 
+	// Determine language label
+	langLabel := "C++"
+	badgeLabel := "C%2B%2B"
+	if config.IsC() {
+		langLabel = "C"
+		badgeLabel = "C"
+	}
+
 	// Badges
 	if config.IncludeCI {
 		sb.WriteString("![CI](https://github.com/USERNAME/" + config.ProjectName + "/workflows/CI/badge.svg)\n")
@@ -385,11 +428,11 @@ func generateReadme(config *Config) string {
 	if config.License != "none" {
 		sb.WriteString(fmt.Sprintf("![License](https://img.shields.io/badge/license-%s-blue.svg)\n", config.License))
 	}
-	sb.WriteString(fmt.Sprintf("![C++%s](https://img.shields.io/badge/C%%2B%%2B-%s-blue.svg)\n\n", config.CppStandard, config.CppStandard))
+	sb.WriteString(fmt.Sprintf("![%s%s](https://img.shields.io/badge/%s-%s-blue.svg)\n\n", langLabel, config.Standard, badgeLabel, config.Standard))
 
 	// Features
 	sb.WriteString("## Features\n\n")
-	sb.WriteString(fmt.Sprintf("- Modern C++%s\n", config.CppStandard))
+	sb.WriteString(fmt.Sprintf("- Modern %s%s\n", langLabel, config.Standard))
 	sb.WriteString("- CMake 3.21+ with presets\n")
 	if config.TestFramework != "none" {
 		sb.WriteString(fmt.Sprintf("- %s testing framework\n", config.TestFramework))
@@ -414,7 +457,11 @@ func generateReadme(config *Config) string {
 	// Requirements
 	sb.WriteString("## Requirements\n\n")
 	sb.WriteString("- CMake 3.21 or higher\n")
-	sb.WriteString(fmt.Sprintf("- C++%s compatible compiler (GCC 10+, Clang 12+, MSVC 2019+)\n", config.CppStandard))
+	if config.IsC() {
+		sb.WriteString(fmt.Sprintf("- C%s compatible compiler (GCC, Clang, MSVC)\n", config.Standard))
+	} else {
+		sb.WriteString(fmt.Sprintf("- C++%s compatible compiler (GCC 10+, Clang 12+, MSVC 2019+)\n", config.Standard))
+	}
 	if config.PackageManager == "vcpkg" {
 		sb.WriteString("- vcpkg (optional, for dependency management)\n")
 	} else if config.PackageManager == "conan" {
