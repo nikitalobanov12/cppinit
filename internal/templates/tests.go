@@ -3,11 +3,41 @@ package templates
 import "fmt"
 
 // TestsCMakeLists generates the tests/CMakeLists.txt
-func TestsCMakeLists(projectName, projectType, testFramework string) string {
+func TestsCMakeLists(projectName, projectType, testFramework string, isC bool) string {
 	// Only link against library if it's a library project
 	linkLib := ""
 	if projectType == "static" || projectType == "header-only" {
 		linkLib = fmt.Sprintf("\n        %s", projectName)
+	}
+
+	// C Unity framework
+	if testFramework == "unity" {
+		srcExt := ".c"
+		return fmt.Sprintf(`include(FetchContent)
+
+FetchContent_Declare(
+    unity
+    GIT_REPOSITORY https://github.com/ThrowTheSwitch/Unity.git
+    GIT_TAG v2.6.0
+)
+FetchContent_MakeAvailable(unity)
+
+add_executable(tests
+    test_main%s
+)
+
+target_link_libraries(tests
+    PRIVATE
+        unity%s
+)
+
+target_include_directories(tests
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+)
+
+add_test(NAME tests COMMAND tests)
+`, srcExt, linkLib)
 	}
 
 	if testFramework == "googletest" {
@@ -42,7 +72,37 @@ gtest_discover_tests(tests)
 `, linkLib)
 	}
 
-	// Catch2
+	if testFramework == "doctest" {
+		return fmt.Sprintf(`include(FetchContent)
+
+FetchContent_Declare(
+    doctest
+    GIT_REPOSITORY https://github.com/doctest/doctest.git
+    GIT_TAG v2.4.11
+)
+FetchContent_MakeAvailable(doctest)
+
+add_executable(tests
+    test_main.cpp
+)
+
+target_link_libraries(tests
+    PRIVATE
+        doctest::doctest%s
+)
+
+target_include_directories(tests
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+)
+
+include(CTest)
+include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
+doctest_discover_tests(tests)
+`, linkLib)
+	}
+
+	// Catch2 (default for C++)
 	return fmt.Sprintf(`include(FetchContent)
 
 FetchContent_Declare(
@@ -89,6 +149,22 @@ TEST(%sTest, SampleTest) {
 }
 `, projectName, projectName)
 		}
+		if testFramework == "doctest" {
+			return fmt.Sprintf(`#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#include <doctest/doctest.h>
+
+TEST_CASE("%s basic tests") {
+    SUBCASE("Basic assertion") {
+        CHECK(1 == 1);
+    }
+
+    SUBCASE("Sample test") {
+        // Add your tests here
+        CHECK(true);
+    }
+}
+`, projectName)
+		}
 		// Catch2 for executable
 		return fmt.Sprintf(`#include <catch2/catch_test_macros.hpp>
 
@@ -121,6 +197,24 @@ TEST(%sTest, AddFunction) {
 `, projectName, projectName, projectName, projectName, projectName, projectName)
 	}
 
+	if testFramework == "doctest" {
+		return fmt.Sprintf(`#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#include <doctest/doctest.h>
+#include "%s/%s.hpp"
+
+TEST_CASE("%s basic tests") {
+    SUBCASE("Basic assertion") {
+        CHECK(1 == 1);
+    }
+
+    SUBCASE("Add function") {
+        CHECK(%s::add(2, 3) == 5);
+        CHECK(%s::add(-1, 1) == 0);
+    }
+}
+`, projectName, projectName, projectName, projectName, projectName)
+	}
+
 	// Catch2 for library
 	return fmt.Sprintf(`#include <catch2/catch_test_macros.hpp>
 #include "%s/%s.hpp"
@@ -136,6 +230,67 @@ TEST_CASE("%s basic tests", "[%s]") {
     }
 }
 `, projectName, projectName, projectName, projectName, projectName, projectName)
+}
+
+// TestMainC generates the C test file (Unity framework)
+func TestMainC(projectName, projectType, testFramework string) string {
+	if projectType == "executable" {
+		return `#include "unity.h"
+
+void setUp(void) {
+    // Set up code here (runs before each test)
+}
+
+void tearDown(void) {
+    // Tear down code here (runs after each test)
+}
+
+void test_basic_assertion(void) {
+    TEST_ASSERT_EQUAL(1, 1);
+}
+
+void test_sample(void) {
+    // Add your tests here
+    TEST_ASSERT_TRUE(1);
+}
+
+int main(void) {
+    UNITY_BEGIN();
+    RUN_TEST(test_basic_assertion);
+    RUN_TEST(test_sample);
+    return UNITY_END();
+}
+`
+	}
+
+	// For library projects, include the library header
+	return fmt.Sprintf(`#include "unity.h"
+#include "%s/%s.h"
+
+void setUp(void) {
+    // Set up code here (runs before each test)
+}
+
+void tearDown(void) {
+    // Tear down code here (runs after each test)
+}
+
+void test_basic_assertion(void) {
+    TEST_ASSERT_EQUAL(1, 1);
+}
+
+void test_add_function(void) {
+    TEST_ASSERT_EQUAL(5, %s_add(2, 3));
+    TEST_ASSERT_EQUAL(0, %s_add(-1, 1));
+}
+
+int main(void) {
+    UNITY_BEGIN();
+    RUN_TEST(test_basic_assertion);
+    RUN_TEST(test_add_function);
+    return UNITY_END();
+}
+`, projectName, projectName, projectName, projectName)
 }
 
 // VcpkgJson generates vcpkg.json manifest
