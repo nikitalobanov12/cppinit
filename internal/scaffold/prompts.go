@@ -34,10 +34,6 @@ var (
 
 // RunPrompts runs the interactive prompts and returns the configuration
 func RunPrompts() (*Config, error) {
-	fmt.Println(titleStyle.Render("🚀 Create C++ Project"))
-	fmt.Println(subtitleStyle.Render("Configure your new C++ project with modern CMake"))
-	fmt.Println()
-
 	config := &Config{}
 
 	// Get current directory name as default project name
@@ -48,12 +44,83 @@ func RunPrompts() (*Config, error) {
 	currentUser, _ := user.Current()
 	defaultAuthor := currentUser.Username
 
+	// Page 0: Language Selection (first question)
+	langForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Language").
+				Description("Which language are you using?").
+				Options(
+					huh.NewOption("C++", "c++"),
+					huh.NewOption("C", "c"),
+				).
+				Value(&config.Language),
+		).Title("Language Selection"),
+	)
+
+	if err := langForm.Run(); err != nil {
+		return nil, err
+	}
+
+	// Display appropriate title based on language
+	if config.IsC() {
+		fmt.Println(titleStyle.Render("🚀 Create C Project"))
+		fmt.Println(subtitleStyle.Render("Configure your new C project with modern CMake"))
+	} else {
+		fmt.Println(titleStyle.Render("🚀 Create C++ Project"))
+		fmt.Println(subtitleStyle.Render("Configure your new C++ project with modern CMake"))
+	}
+	fmt.Println()
+
+	// Build standard options based on language
+	var standardOptions []huh.Option[string]
+	var defaultDescription string
+	if config.IsC() {
+		standardOptions = []huh.Option[string]{
+			huh.NewOption("C89 (ANSI C)", "89"),
+			huh.NewOption("C99", "99"),
+			huh.NewOption("C11 (Recommended)", "11"),
+			huh.NewOption("C17", "17"),
+			huh.NewOption("C23", "23"),
+		}
+		defaultDescription = "A modern C project"
+	} else {
+		standardOptions = []huh.Option[string]{
+			huh.NewOption("C++11", "11"),
+			huh.NewOption("C++14", "14"),
+			huh.NewOption("C++17 (Recommended)", "17"),
+			huh.NewOption("C++20", "20"),
+			huh.NewOption("C++23", "23"),
+		}
+		defaultDescription = "A modern C++ project"
+	}
+
+	// Build project type options based on language
+	var projectTypeOptions []huh.Option[string]
+	if config.IsC() {
+		projectTypeOptions = []huh.Option[string]{
+			huh.NewOption("Executable", "executable"),
+			huh.NewOption("Static Library", "static"),
+		}
+	} else {
+		projectTypeOptions = []huh.Option[string]{
+			huh.NewOption("Executable", "executable"),
+			huh.NewOption("Static Library", "static"),
+			huh.NewOption("Header-only Library", "header-only"),
+		}
+	}
+
+	langLabel := "C++"
+	if config.IsC() {
+		langLabel = "C"
+	}
+
 	// Page 1: Basic Info
 	basicForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewInput().
 				Title("Project name").
-				Description("The name of your C++ project").
+				Description("The name of your "+langLabel+" project").
 				Value(&config.ProjectName).
 				Placeholder(defaultName).
 				Validate(validateProjectName),
@@ -62,7 +129,7 @@ func RunPrompts() (*Config, error) {
 				Title("Description").
 				Description("A short description of your project").
 				Value(&config.Description).
-				Placeholder("A modern C++ project"),
+				Placeholder(defaultDescription),
 
 			huh.NewInput().
 				Title("Author name").
@@ -70,31 +137,37 @@ func RunPrompts() (*Config, error) {
 				Placeholder(defaultAuthor),
 
 			huh.NewSelect[string]().
-				Title("C++ Standard").
-				Description("Which C++ standard version to use").
-				Options(
-					huh.NewOption("C++11", "11"),
-					huh.NewOption("C++14", "14"),
-					huh.NewOption("C++17 (Recommended)", "17"),
-					huh.NewOption("C++20", "20"),
-					huh.NewOption("C++23", "23"),
-				).
-				Value(&config.CppStandard),
+				Title(langLabel+" Standard").
+				Description("Which "+langLabel+" standard version to use").
+				Options(standardOptions...).
+				Value(&config.Standard),
 
 			huh.NewSelect[string]().
 				Title("Project type").
 				Description("What kind of project are you building?").
-				Options(
-					huh.NewOption("Executable", "executable"),
-					huh.NewOption("Static Library", "static"),
-					huh.NewOption("Header-only Library", "header-only"),
-				).
+				Options(projectTypeOptions...).
 				Value(&config.ProjectType),
 		).Title("Project Basics"),
 	)
 
 	if err := basicForm.Run(); err != nil {
 		return nil, err
+	}
+
+	// Build test framework options based on language
+	var testFrameworkOptions []huh.Option[string]
+	if config.IsC() {
+		testFrameworkOptions = []huh.Option[string]{
+			huh.NewOption("None", "none"),
+			huh.NewOption("Unity (C testing)", "unity"),
+		}
+	} else {
+		testFrameworkOptions = []huh.Option[string]{
+			huh.NewOption("None", "none"),
+			huh.NewOption("GoogleTest", "googletest"),
+			huh.NewOption("Catch2", "catch2"),
+			huh.NewOption("doctest", "doctest"),
+		}
 	}
 
 	// Page 2: Dependencies & Testing
@@ -114,12 +187,7 @@ func RunPrompts() (*Config, error) {
 			huh.NewSelect[string]().
 				Title("Testing framework").
 				Description("Include a testing framework?").
-				Options(
-					huh.NewOption("None", "none"),
-					huh.NewOption("GoogleTest", "googletest"),
-					huh.NewOption("Catch2", "catch2"),
-					huh.NewOption("doctest", "doctest"),
-				).
+				Options(testFrameworkOptions...).
 				Value(&config.TestFramework),
 
 			huh.NewConfirm().
@@ -214,7 +282,11 @@ func RunPrompts() (*Config, error) {
 		config.ProjectName = defaultName
 	}
 	if config.Description == "" {
-		config.Description = "A modern C++ project"
+		if config.IsC() {
+			config.Description = "A modern C project"
+		} else {
+			config.Description = "A modern C++ project"
+		}
 	}
 	if config.AuthorName == "" {
 		config.AuthorName = defaultAuthor
@@ -245,7 +317,11 @@ func PrintSuccess(config *Config) {
 
 	// Show what was created
 	fmt.Println("Created project with:")
-	fmt.Printf("  • C++%s %s\n", config.CppStandard, config.ProjectType)
+	if config.IsC() {
+		fmt.Printf("  • C%s %s\n", config.Standard, config.ProjectType)
+	} else {
+		fmt.Printf("  • C++%s %s\n", config.Standard, config.ProjectType)
+	}
 	if config.TestFramework != "none" {
 		fmt.Printf("  • %s testing\n", config.TestFramework)
 	}
