@@ -4,9 +4,10 @@ package scaffold
 type Config struct {
 	ProjectName    string
 	Description    string
-	CppStandard    string // "11", "14", "17", "20", "23"
+	Language       string // "c" or "c++"
+	Standard       string // C: "89", "99", "11", "17", "23" | C++: "11", "14", "17", "20", "23"
 	ProjectType    string // "executable", "static", "header-only"
-	TestFramework  string // "none", "googletest", "catch2", "doctest"
+	TestFramework  string // "none", "googletest", "catch2", "doctest" (C++ only), "unity" (C only)
 	PackageManager string // "none", "vcpkg", "conan", "cpm"
 	License        string // "none", "mit", "apache2", "gpl3", "bsd3"
 
@@ -33,7 +34,8 @@ type Config struct {
 // DefaultConfig returns a config with sensible defaults
 func DefaultConfig() *Config {
 	return &Config{
-		CppStandard:    "17",
+		Language:       "c++",
+		Standard:       "17",
 		ProjectType:    "executable",
 		TestFramework:  "none",
 		PackageManager: "none",
@@ -41,4 +43,14 @@ func DefaultConfig() *Config {
 		UseClangFormat: true,
 		UseClangTidy:   true,
 	}
+}
+
+// IsC returns true if the project is a C project
+func (c *Config) IsC() bool {
+	return c.Language == "c"
+}
+
+// IsCpp returns true if the project is a C++ project
+func (c *Config) IsCpp() bool {
+	return c.Language == "c++" || c.Language == ""
 }
