@@ -24,11 +24,12 @@ func run() error {
 
 	// Quick create flags (non-interactive)
 	name := flag.String("name", "", "Project name (enables non-interactive mode)")
-	description := flag.String("desc", "A modern C++ project", "Project description")
+	description := flag.String("desc", "", "Project description")
 	author := flag.String("author", "", "Author name")
-	cppStd := flag.String("std", "17", "C++ standard (11, 14, 17, 20, 23)")
+	language := flag.String("lang", "c++", "Language (c, c++)")
+	std := flag.String("std", "", "Standard (C: 89, 99, 11, 17, 23 | C++: 11, 14, 17, 20, 23)")
 	projectType := flag.String("type", "executable", "Project type (executable, static, header-only)")
-	testFw := flag.String("tests", "none", "Test framework (none, googletest, catch2, doctest)")
+	testFw := flag.String("tests", "none", "Test framework (none, googletest, catch2, doctest for C++; none, unity for C)")
 	pkgMgr := flag.String("pkg", "none", "Package manager (none, vcpkg, conan, cpm)")
 	license := flag.String("license", "mit", "License (none, mit, apache2, gpl3, bsd3)")
 
@@ -65,11 +66,32 @@ func run() error {
 
 	// Non-interactive mode if name is provided
 	if *name != "" {
+		// Set default standard based on language
+		standard := *std
+		if standard == "" {
+			if *language == "c" {
+				standard = "11" // C11 default
+			} else {
+				standard = "17" // C++17 default
+			}
+		}
+
+		// Set default description based on language
+		desc := *description
+		if desc == "" {
+			if *language == "c" {
+				desc = "A modern C project"
+			} else {
+				desc = "A modern C++ project"
+			}
+		}
+
 		config = &scaffold.Config{
 			ProjectName:      *name,
-			Description:      *description,
+			Description:      desc,
 			AuthorName:       *author,
-			CppStandard:      *cppStd,
+			Language:         *language,
+			Standard:         standard,
 			ProjectType:      *projectType,
 			TestFramework:    *testFw,
 			PackageManager:   *pkgMgr,
@@ -131,7 +153,7 @@ func run() error {
 }
 
 func printHelp() {
-	fmt.Println(`cppinit - Create C++ projects with modern CMake
+	fmt.Println(`cppinit - Create C/C++ projects with modern CMake
 
 Usage:
   cppinit                    Run interactive project wizard
@@ -139,14 +161,18 @@ Usage:
 
 Project Options:
   -name string         Project name (required for non-interactive mode)
-  -desc string         Project description (default "A modern C++ project")
+  -desc string         Project description
   -author string       Author name for license
-  -std string          C++ standard: 11, 14, 17, 20, 23 (default "17")
+  -lang string         Language: c, c++ (default "c++")
+  -std string          Standard (C: 89, 99, 11, 17, 23 | C++: 11, 14, 17, 20, 23)
+                       Defaults to C11 for C, C++17 for C++
   -type string         Project type: executable, static, header-only (default "executable")
   -license string      License: none, mit, apache2, gpl3, bsd3 (default "mit")
 
 Dependencies:
-  -tests string        Test framework: none, googletest, catch2, doctest (default "none")
+  -tests string        Test framework:
+                         C++: none, googletest, catch2, doctest (default "none")
+                         C: none, unity (default "none")
   -pkg string          Package manager: none, vcpkg, conan, cpm (default "none")
   -benchmark           Include Google Benchmark for performance testing
 
@@ -175,14 +201,20 @@ Examples:
   # Interactive wizard
   cppinit
 
-  # Quick executable with defaults
+  # Quick C++ executable with defaults
   cppinit -name myapp
 
-  # Full-featured library
+  # C project
+  cppinit -name myapp -lang c -std 11
+
+  # Full-featured C++ library
   cppinit -name mylib -type static -std 20 -tests googletest -full
 
   # Minimal header-only library
   cppinit -name myheader -type header-only -minimal
+
+  # C library with Unity tests
+  cppinit -name myclib -lang c -type static -tests unity
 
   # Executable with specific features
   cppinit -name myapp -tests catch2 -sanitizers -ci -vscode`)
