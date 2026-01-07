@@ -117,12 +117,9 @@ function(set_project_warnings target)
         -Wall
         -Wextra              # reasonable and standard
         -Wshadow             # warn if a variable declaration shadows one from a parent context
-        -Wnon-virtual-dtor   # warn if a class with virtual functions has a non-virtual destructor
-        -Wold-style-cast     # warn for c-style casts
         -Wcast-align         # warn for potential performance problem casts
         -Wunused             # warn on anything being unused
-        -Woverloaded-virtual # warn if you overload (not override) a virtual function
-        -Wpedantic           # warn if non-standard C++ is used
+        -Wpedantic           # warn if non-standard C/C++ is used
         -Wconversion         # warn on type conversions that may lose data
         -Wsign-conversion    # warn on sign conversions
         -Wnull-dereference   # warn if a null dereference is detected
@@ -131,27 +128,49 @@ function(set_project_warnings target)
         -Wimplicit-fallthrough # warn on missing break in switch
     )
 
+    # C++ specific warnings
+    set(CLANG_CXX_WARNINGS
+        -Wnon-virtual-dtor   # warn if a class with virtual functions has a non-virtual destructor
+        -Wold-style-cast     # warn for c-style casts
+        -Woverloaded-virtual # warn if you overload (not override) a virtual function
+    )
+
     set(GCC_WARNINGS
         ${CLANG_WARNINGS}
         -Wmisleading-indentation # warn if indentation implies blocks where blocks do not exist
         -Wduplicated-cond        # warn if if / else chain has duplicated conditions
         -Wduplicated-branches    # warn if if / else branches have duplicated code
         -Wlogical-op             # warn about logical operations being used where bitwise were probably wanted
+    )
+
+    # C++ specific warnings for GCC
+    set(GCC_CXX_WARNINGS
         -Wuseless-cast           # warn if you perform a cast to the same type
     )
+
+    # Determine if we're compiling C or C++
+    get_target_property(target_type ${target} TYPE)
+    get_target_property(target_sources ${target} SOURCES)
 
     if(MSVC)
         set(PROJECT_WARNINGS ${MSVC_WARNINGS})
     elseif(CMAKE_CXX_COMPILER_ID MATCHES ".*Clang")
         set(PROJECT_WARNINGS ${CLANG_WARNINGS})
-    elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        # Add C++ specific warnings if CXX is enabled
+        if(CMAKE_CXX_COMPILER)
+            list(APPEND PROJECT_WARNINGS ${CLANG_CXX_WARNINGS})
+        endif()
+    elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID STREQUAL "GNU")
         set(PROJECT_WARNINGS ${GCC_WARNINGS})
+        # Add C++ specific warnings if CXX is enabled
+        if(CMAKE_CXX_COMPILER)
+            list(APPEND PROJECT_WARNINGS ${GCC_CXX_WARNINGS})
+        endif()
     else()
-        message(AUTHOR_WARNING "No compiler warnings set for '${CMAKE_CXX_COMPILER_ID}' compiler.")
+        message(AUTHOR_WARNING "No compiler warnings set for compiler.")
     endif()
 
     # Check if target is INTERFACE (header-only library)
-    get_target_property(target_type ${target} TYPE)
     if(target_type STREQUAL "INTERFACE_LIBRARY")
         target_compile_options(${target} INTERFACE ${PROJECT_WARNINGS})
     else()
@@ -249,6 +268,17 @@ int main() {
 `, projectName)
 }
 
+// MainC generates main.c for C executable projects
+func MainC(projectName string) string {
+	return fmt.Sprintf(`#include <stdio.h>
+
+int main(void) {
+    printf("Hello from %s!\n");
+    return 0;
+}
+`, projectName)
+}
+
 // LibraryCpp generates the library source file
 func LibraryCpp(projectName string) string {
 	return fmt.Sprintf(`#include "%s/%s.hpp"
@@ -261,6 +291,16 @@ int add(int a, int b) {
 
 } // namespace %s
 `, projectName, projectName, projectName, projectName)
+}
+
+// LibraryC generates the C library source file
+func LibraryC(projectName string) string {
+	return fmt.Sprintf(`#include "%s/%s.h"
+
+int %s_add(int a, int b) {
+    return a + b;
+}
+`, projectName, projectName, projectName)
 }
 
 // LibraryHpp generates the library header file
@@ -281,6 +321,32 @@ int add(int a, int b);
 
 #endif // %s_HPP
 `, upperName, upperName, projectName, projectName, upperName)
+}
+
+// LibraryH generates the C library header file
+func LibraryH(projectName string) string {
+	upperName := toUpperSnake(projectName)
+	return fmt.Sprintf(`#ifndef %s_H
+#define %s_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * Adds two integers
+ * @param a First operand
+ * @param b Second operand
+ * @return Sum of a and b
+ */
+int %s_add(int a, int b);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* %s_H */
+`, upperName, upperName, projectName, upperName)
 }
 
 // HeaderOnlyHpp generates a header-only library template
